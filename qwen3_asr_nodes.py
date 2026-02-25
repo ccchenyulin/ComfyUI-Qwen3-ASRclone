@@ -45,31 +45,37 @@ SUPPORTED_LANGUAGES = [
 ]
 
 def get_qwen_model_list():
-    all_files = folder_paths.get_filename_list("diffusion_models")
+    # 直接指向模型根目录下的 Qwen3-ASR 文件夹
+    qwen_root_dir = os.path.join(folder_paths.models_dir, "Qwen3-ASR")
     qwen_models = set()
-    for f in all_files:
-        # Look for the specific structure: Qwen3-ASR/ModelFolder/
-        if "Qwen3-ASR" in f:
-            f = f.replace("\\", "/")
-            parts = f.split("/")
-            if len(parts) >= 2:
-                # We want the path up to the second part (e.g. Qwen3-ASR/Qwen3-ASR-1.7B)
-                qwen_models.add("/".join(parts[:2]))
+    
+    # 检查 Qwen3-ASR 目录是否存在
+    if os.path.exists(qwen_root_dir) and os.path.isdir(qwen_root_dir):
+        # 遍历目录下的所有子文件夹（每个子文件夹对应一个Qwen3-ASR模型）
+        for item in os.listdir(qwen_root_dir):
+            item_path = os.path.join(qwen_root_dir, item)
+            if os.path.isdir(item_path):  # 只识别文件夹（模型以文件夹形式存放）
+                qwen_models.add(item)  # 直接存模型文件夹名，无需前缀
     
     res = sorted(list(qwen_models))
-    return res if res else ["None Found (Place in models/diffusion_models/Qwen3-ASR/)"]
+    # 提示语改为正确的目录路径
+    return res if res else ["None Found (Place in models/Qwen3-ASR/)"]
 
 def resolve_qwen_path(model_name):
-    # Try standard Comfy resolution first
+    # 核心：模型根目录下的 Qwen3-ASR 文件夹
+    qwen_root_dir = os.path.join(folder_paths.models_dir, "Qwen3-ASR")
+    # 拼接最终路径：models/Qwen3-ASR/选中的模型名
+    full_path = os.path.join(qwen_root_dir, model_name)
+    
+    # 如果路径存在，直接返回（优先级最高）
+    if os.path.exists(full_path):
+        return full_path
+    
+    # 兜底逻辑（仅防止极端情况，可保留）
+    print(f"[Qwen3-ASR] 未找到模型 {model_name} 在 {qwen_root_dir}，尝试兼容路径...")
     path = folder_paths.get_full_path("diffusion_models", model_name)
     if path:
         return os.path.dirname(path) if os.path.isfile(path) else path
-    
-    # Fallback: manual join with configured diffusion_models paths for directory support
-    for base in folder_paths.get_folder_paths("diffusion_models"):
-        full_path = os.path.join(base, model_name)
-        if os.path.exists(full_path):
-            return full_path
     return model_name
 
 class Qwen3ForcedAlignerConfig:
