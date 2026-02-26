@@ -134,6 +134,9 @@ class Qwen3ASRTranscriber:
                 "flash_attention_2": ("BOOLEAN", {"default": False, "tooltip": "Enable Flash Attention 2 for faster inference and lower VRAM usage."}),
                 "chunk_size": ("INT", {"default": 30, "min": 0, "max": 300, "tooltip": "Process audio in chunks of this many seconds. Set to 0 to disable chunking (not recommended for long audio)."}),
                 "overlap": ("INT", {"default": 2, "min": 0, "max": 10, "tooltip": "Overlap between chunks in seconds to maintain context."}),
+                "unload_after_use": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Unload the model from VRAM after transcription to free memory. Useful if you run this node infrequently."}),
             },
             "optional": {
                 "forced_aligner": ("QWEN3_ALIGNER_CONF", {"tooltip": "Optional configuration for the Qwen3 Forced Aligner to generate word-level timestamps."}),
@@ -145,7 +148,7 @@ class Qwen3ASRTranscriber:
     FUNCTION = "transcribe"
     CATEGORY = "Qwen3-ASR"
 
-    def transcribe(self, audio, model_name, language, device, precision, max_new_tokens, flash_attention_2, chunk_size, overlap, forced_aligner=None):
+    def transcribe(self, audio, model_name, language, device, precision, max_new_tokens, flash_attention_2, chunk_size, overlap, unload_after_use, forced_aligner=None):
         global _QWEN3_MODEL_CACHE
         
         # Support for ComfyUI interruption (Cancel button)
@@ -295,13 +298,17 @@ class Qwen3ASRTranscriber:
                 print("[Qwen3-ASR] NO_VRAM mode: Purging model after use.")
                 _QWEN3_MODEL_CACHE.pop(cache_key, None)
                 model_management.soft_empty_cache()
+            if unload_after_use:
+                _QWEN3_MODEL_CACHE.pop(cache_key, None)
+                model_management.soft_empty_cache()
+                gc.collect()
 
             return (transcription_text, timestamp_output)
 
         except Exception as e:
             if isinstance(e, model_management.InterruptProcessingException):
                 # Cleanup on interrupt
-                if model_management.vram_state == model_management.VRAMState.NO_VRAM:
+                if model_management.vram_state == model_management.VRAMState.NO_VRAM or unload_after_use:
                     _QWEN3_MODEL_CACHE.pop(cache_key, None)
                 gc.collect()
                 model_management.soft_empty_cache()
