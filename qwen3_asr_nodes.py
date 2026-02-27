@@ -140,6 +140,12 @@ class Qwen3ASRTranscriber:
             },
             "optional": {
                 "forced_aligner": ("QWEN3_ALIGNER_CONF", {"tooltip": "Optional configuration for the Qwen3 Forced Aligner to generate word-level timestamps."}),
+                # 👇 已修改：更新为指定的悬停提示文本
+                "context": ("STRING", {
+                    "default": "", 
+                    "multiline": True, 
+                    "tooltip": "参考提示(建议书写)：\n输入框为空不启用参考词功能，不影响原生识别效果\n输入框不为空模型会在解码时优先匹配你写的词汇，同时理解词汇的语境关联\n内容长度建议控制在500 字以内，过长会稀释热词权重，反而降低效果\n如：\n# 核心技术术语\nComfyUI\nQwen3 ASR\nKubernetes\nDocker\nPython\nPyTorch\n通义千问\n\n# 场景上下文\n这是一段ComfyUI自定义节点开发的技术教程，讲解Qwen3 ASR语音转写节点的开发，涉及Kubernetes容器部署、Python和PyTorch代码编写。"
+                }),
             }
         }
 
@@ -148,7 +154,8 @@ class Qwen3ASRTranscriber:
     FUNCTION = "transcribe"
     CATEGORY = "Qwen3-ASR"
 
-    def transcribe(self, audio, model_name, language, device, precision, max_new_tokens, flash_attention_2, chunk_size, overlap, unload_after_use, forced_aligner=None):
+    # 👇 新增：context参数
+    def transcribe(self, audio, model_name, language, device, precision, max_new_tokens, flash_attention_2, chunk_size, overlap, unload_after_use, forced_aligner=None, context=""):
         global _QWEN3_MODEL_CACHE
         
         # Support for ComfyUI interruption (Cancel button)
@@ -167,6 +174,8 @@ class Qwen3ASRTranscriber:
         }
         dtype = dtype_map[precision]
         lang_param = None if not language or language.lower() == "auto" else language
+        # 👇 新增：处理参考词汇参数（去除首尾空格）
+        ctx = context.strip()
 
         # Handle ComfyUI CPU mode or Low VRAM settings
         if model_management.cpu_mode():
@@ -260,6 +269,7 @@ class Qwen3ASRTranscriber:
                     results = model.transcribe(
                         audio=[(chunk_np, sample_rate)],
                         language=lang_param,
+                        context=ctx if ctx else None,  # 👇 新增：注入参考词汇
                         return_time_stamps=True if forced_aligner else False
                     )
                     
@@ -281,6 +291,7 @@ class Qwen3ASRTranscriber:
                 results = model.transcribe(
                     audio=[(full_waveform_np, sample_rate)],
                     language=lang_param,
+                    context=ctx if ctx else None,  # 👇 新增：注入参考词汇
                     return_time_stamps=True if forced_aligner else False
                 )
                 res = results[0]
